@@ -12,6 +12,9 @@ from telegram.ext import Application, CommandHandler, MessageHandler, filters, C
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# Admin user IDs - update with your admin user IDs
+ADMINS = set(6657831903)
+
 # Database setup
 def init_db():
     conn = sqlite3.connect('bot.db')
@@ -412,14 +415,14 @@ async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE):
     # Don't send error messages to avoid cascading errors
     # The bot will continue working normally
 
-def main():
+async def main():
     init_db()
     token = get_bot_token()
     if not token:
         print("Error: Please set the BOT_TOKEN environment variable with your Telegram bot token.")
         return
     
-    # Build application with job queue enabled
+    # Build application
     application = Application.builder().token(token).build()
 
     # Handlers
@@ -442,9 +445,22 @@ def main():
     # Error handler
     application.add_error_handler(error_handler)
 
-    # Start the bot with job queue
+    # Start the bot using polling (suitable for development/testing)
+    # For production on Railway, consider using webhooks
     logger.info("Bot started successfully")
-    application.run_polling(allowed_updates=Update.ALL_TYPES)
+    async with application:
+        await application.initialize()
+        await application.start()
+        await application.updater.start_polling(allowed_updates=Update.ALL_TYPES)
+        logger.info("Bot polling started")
+        try:
+            await asyncio.Event().wait()
+        except KeyboardInterrupt:
+            logger.info("Stopping bot")
+        finally:
+            await application.updater.stop()
+            await application.stop()
+            await application.shutdown()
 
 if __name__ == '__main__':
-    main()
+    asyncio.run(main())
